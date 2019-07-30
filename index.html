@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>Group4</title>
+  <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1">
+  <link href="css/frame.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href="css/controls.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href="css/custom.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300,700' rel='stylesheet' type='text/css'>
+  <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700" rel="stylesheet">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="js/menu.js"></script>
+  <style>
+    .menu-index {
+      color: rgb(255, 255, 255) !important;
+      opacity: 1 !important;
+      font-weight: 700 !important;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="content-container">
+    <div class="content">
+      <div class="content-table flex-column">
+        <!--Start Intro-->
+        <div class="flex-row">
+          <div class="flex-item flex-column">
+            <h1 class="heading">AUTOMATED ANIMAL TROUGH REFILLING AND STATISTICS SYSTEM by ULTRON</h1>
+            <a class="text text-large" href="https://github.com/Ultron7/ultron/blob/master/cloudupdate.ino">Github Link</a>
+          </div>
+          <div class="flex-item flex-column">
+            <p class="text text-large">
+              <a target="_blank" href="javascript:void(0)">Author 1</a> Masumbuko Roy Arnaud Beckman<br>
+              <a target="_blank" href="javascript:void(0)">Author 2</a> Misinde Arnold<br>
+              <a target="_blank" href="javascript:void(0)">Author 3</a> Nakimbugwe Esther<br>
+              <a target="_blank" href="javascript:void(0)">Author 4</a> Jemba Tony<br>
+              <a target="_blank" href="javascript:void(0)">Author 5</a> Kayondo Terry William<br>
+            </p>
+          </div>
+        </div>
+        <div class="flex-row">
+          <div class="flex-item flex-column">
+            <p class="text add-top-margin">
+              <h2 class="add-top-margin">Introduction</h2>
+              <hr>
+              Farmers without small fortunes for expensive machinery are faced with the challenge of manually refilling
+              animal water troughs. Considering how large the animal headcount on a farm can be, this manual process can
+              waste a lot time that could be better spent doing more productive work. Additionally, there are facts
+              presented by the patterns of water taken by animals on a regular basis, facts which remain unseen because
+              farmers are unable to collect the data needed to identify these patterns.
+
+              As a solution to this problem, we propose an embedded system specifically designed to automatically refill
+              the animal water troughs, track how much water is taken regularly and uniquely identify which animals have
+              taken water and by elimination which animals haven’t.
+
+            </p>
+          </div>
+        </div>
+        <!--End Intro-->
+        <!--Start Text Only-->
+        <div class="flex-row">
+          <div class="flex-item flex-column">
+            <h2 class="add-top-margin">Methodology</h2>
+            <hr>
+            <p class="text">
+              <h3>Water Level Tracking</h3>
+
+
+              The system tracks the level water in the rough in real time using an ultrasonic sensor. The ultrasonic
+              sensor uses a transducer to send and receive ultrasonic pulses that relay back information about an
+              object’s proximity (the surface of the water, in this case). It sends an ultrasonic pulse which travels
+              through the air and if there is an obstacle or object, it will bounce back to the sensor. By calculating
+              the travel time and the speed of sound, the distance can be calculated. And from this distance, the water
+              level can be tracked
+
+              <h3>Automatic Water Supply</h3>
+
+              With the water level tracking functionality, the system is able to tell when the tank is full and when it
+              is empty. When the tank is empty, the system passes current through the brushless water pump to
+              automatically refill the trough by pumping water from the water source (tank). When the tank is full on
+              refilling it the water supply is cut off by stopping the current through the brushless water pump.
+
+              <h3>Animal Identification</h3>
+
+              When an animal comes to take water from the trough, the RFID reader detects the RFID tags attached to the
+              animal. The RFID tags have unique tags which are read by the RFID reader to uniquely identify the animal
+              that is presently taking water.
+
+              <h3>Server Data Storage</h3>
+
+              The system uses a GSM module and its GPRS functionality to send collected data to the server hosted by
+              thingsspeak.com.
+
+
+              <h3>Mobile Application Statistics</h3>
+
+              A mobile application client requests for statistics information from the server and displays it to the
+              user. The application shows information like daily water intake, cows that haven’t taken water and daily
+              number of refills.
+
+            </p>
+            <h2>Objectives</h2>
+            <hr />
+            <p class="text">
+              <ul>
+                <li>To automatically refill the animal water trough when it is empty.</li>
+                <li>To track how much water is taken by the animals on a regular basis.</li>
+                <li>To identify which animals are taking water.</li>
+                <li>To send all the relevant data collected to a server that composes useful statistics.</li>
+                <li>To show the farmer useful statistics through a client mobile application that exposes this
+                  information from the server.</li>
+
+              </ul>
+
+
+
+              <h2 class="add-top-margin">Next Steps</h2>
+              <hr>
+              <p class="text">
+                Moving foward, we would like to incoporate more sophisticted and efficient solutiions like Artificial Intelligence to better analyze collected data
+              </p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+</body>
+
+</html>
