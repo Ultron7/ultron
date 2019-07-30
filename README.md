@@ -1,5 +1,2 @@
-# Traffic-Lights-System
-A system that controls traffic on roads using both fixed time delays and ir sensors
-
-## ABOUT THE PROJECT
-https://group4day2019.github.io/Traffic-Lights-System/
+# Auto-Refilling Troughs & Statistics
+A system that automatically refills animal troughs and keeps track of changes in animals' water intake
