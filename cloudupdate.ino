@@ -1,126 +1,132 @@
-#define MAX_WATER_LEVEL 5
-#define MIN_WATER_LEVEL 100
-
-#include <SPI.h>
 #include <NewPing.h>
+#include <SPI.h>
 #include <MFRC522.h>
-#include <Sim800L.h>
-#include <GSMSim.h>
-#include <Wire.h>
-#include <Adafruit_BMP085.h>
 #include <SoftwareSerial.h>
-#include "Adafruit_FONA.h"
-#include <gprs.h>
 
+// ultrasonic
+#define ULTRASONIC_TRIG A0
+#define ULTRASONIC_ECHO A1
+#define ULTRASONIC_DELAY 2000
+#define ULTRASONIC_SERVER_DELAY 600000 // 10 minutes
+#define ULTRASONIC_FULL 10
+#define ULTRASONIC_EMPTY 40
+
+//NewPing WaterTracker(ULTRASONIC_TRIG, ULTRASONIC_ECHO, 400);
+int waterLevel, waterLevelPreviousTime, waterLevelPreviousTimeServer;
+long duration;
+int distance;
+
+// pump
+#define PUMP_PIN 8
+
+int isPumpOn = 0;
+
+// rfid
 #define SS_PIN 10
 #define RST_PIN 9
-#define valve_PIN 4
+#define ANIMAL_SERVER_DELAY 2000
 
 MFRC522 mfrc522(SS_PIN, RST_PIN); // Create MFRC522 instance.
-SoftwareSerial mySerial(3, 2); //SIM800L Tx & Rx is connected to Arduino #3 & #2
 
-int trig = 6;
-int echo = 7;
-//int GREEN_LED = 11, RED_LED = 12;
-NewPing Sonar(trig, echo, 400);
-int isWaterSupplyOn = 0;
-int waterSupplyWasStarted = 0, waterSupplyWasStopped = 0;
-float waterLevel;
+String lastId = "";
+int animalServerPreviousTime;
+int tagCount1 = 0, tagCount2 = 0;
 String cow1Id = "39 38 19 10", cow2Id = "8B A4 A8 1B";
-String value_one;
-float value_two;
-int net_status;
-int firsttime = 0;
+// gsm
+
+// We Created software serial object to communicate with SIM800L
+SoftwareSerial mySerial(3, 2); //SIM800L Tx & Rx is connected to Arduino #3 & #2
 
 void setup()
 {
-  //Begin serial communication with Arduino and Arduino IDE (Serial Monitor)
   Serial.begin(9600);
-  //Begin serial communication with Arduino and SIM800L
-  mySerial.begin(9600);       
-   
-  pinMode(valve_PIN, OUTPUT);
-  //pinMode(GREEN_LED, OUTPUT);
-  //pinMode(RED_LED, OUTPUT);
-  SPI.begin();        // Initiate  SPI bus
-  mfrc522.PCD_Init(); // Initiate MFRC522
-  Serial.println();
-  waterLevel = getWaterLevel();
+  // gsm
+  mySerial.begin(9600);
+  // ultrasonic
+  pinMode(ULTRASONIC_TRIG, OUTPUT);
+  pinMode(ULTRASONIC_ECHO, INPUT);
+  waterLevelPreviousTime = millis();
+  waterLevelPreviousTimeServer = millis();
+  // pump
+  pinMode(PUMP_PIN, OUTPUT);
+  // rfid
+  animalServerPreviousTime = millis();
+  SPI.begin();        // Init SPI bus
+  mfrc522.PCD_Init(); // Init MFRC522
+  delay(4);
 }
 
 void loop()
-{ // put your main code here, to run repeatedly:
-  updateWaterLevel();
-  updateWaterSupply();
-  checkForNewAnimal();
-  delaying();
-}
-
-// Esther
-float getWaterLevel()
 {
-  return Sonar.ping_cm();
-  ;
+  // ultrasonic
+  updateWaterLevel();
+  processTroughFullOrEmpty();
+  // pump
+  updatePumpState();
+  // rfid
+  checkForAnimal();
 }
 
-// Esther
-// start or stop water supply depending on water level
+// ultrasonic
 void updateWaterLevel()
 {
-  waterLevel = getWaterLevel();
-  //logFloat(waterLevel);
-  if (waterLevel < MAX_WATER_LEVEL && waterLevel > 0)
+  if (millis() - waterLevelPreviousTime > ULTRASONIC_DELAY)
   {
-    stopWaterSupply();
+    digitalWrite(ULTRASONIC_TRIG, LOW);
+    delayMicroseconds(2);
+    //sets the tri pin
+    digitalWrite(ULTRASONIC_TRIG, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(ULTRASONIC_TRIG, LOW);
+    //reads echo pin, returns the sound wave travel time
+    duration = pulseIn(ULTRASONIC_ECHO, HIGH);
+    distance = duration * 0.034 / 2;
+    return distance;
+    if (distance != 0)
+      waterLevel = distance;
+    waterLevelPreviousTime = millis();
   }
-  else if (waterLevel > MIN_WATER_LEVEL && waterLevel > 0)
+  if (millis() - waterLevelPreviousTimeServer > ULTRASONIC_SERVER_DELAY)
   {
-    startWaterSupply();
-  }
-}
-
-void startWaterSupply()
-{
-  if (!waterSupplyWasStarted)
-  {
-    //digitalWrite(GREEN_LED, HIGH);
-    //digitalWrite(RED_LED, LOW);
-    isWaterSupplyOn = 1;
-    logString("started water supply");
-    waterSupplyWasStarted = 1;
-    waterSupplyWasStopped = 0;
-  }
-}
-
-void stopWaterSupply()
-{
-  if (!waterSupplyWasStopped)
-  {
-    //digitalWrite(GREEN_LED, LOW);
-    //digitalWrite(RED_LED, HIGH);
-    isWaterSupplyOn = 0;
-    logString("stopped water supply");
-    waterSupplyWasStopped = 1;
-    waterSupplyWasStarted = 0;
+    // send water level to server every ULTRASONIC_SERVER_DELAY milliseconds
+    sendWaterLevel(waterLevel);
+    waterLevelPreviousTimeServer = millis();
   }
 }
 
-// Tony
-void updateWaterSupply()
+void isTroughFull()
 {
-  if (isWaterSupplyOn)
+  return waterLevel <= ULTRASONIC_FULL;
+}
+
+void isTroughEmpty()
+{
+  return waterLevel >= ULTRASONIC_EMPTY;
+}
+
+void processTroughFullOrEmpty()
+{
+  if (isTroughFull)
   {
-    //keep the water coming
-    openvalve();
+    isPumpOn = 0;
   }
+  else if (isTroughEmpty)
+  {
+    isPumpOn = 1;
+  }
+}
+
+// pump
+void updatePumpState()
+{
+  if (isPumpOn)
+    digitalWrite(PUMP_PIN, HIGH);
   else
-  {
-    closevalve();
-  }
+    digitalWrite(PUMP_PIN, LOW);
 }
 
-// Terry
-void checkForNewAnimal()
+// rfid
+void checkForAnimal()
 {
   // Look for new cards
   if (!mfrc522.PICC_IsNewCardPresent())
@@ -143,119 +149,137 @@ void checkForNewAnimal()
     content.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " "));
     content.concat(String(mfrc522.uid.uidByte[i], HEX));
   }
-  Serial.println();
-  Serial.print("Message : ");
   content.toUpperCase();
-  if (content.substring(1) == cow1Id)
+  if (millis() - animalServerPreviousTime > ANIMAL_SERVER_DELAY)
   {
-    Serial.println("Cow one detected");
-    value_one = cow1Id;//assign cow 1 id to value_one
-    Serial.println();
-    delay(500);
+    animalServerPreviousTime = millis();
+    // sendAnimalId(content.substring(1));
+    if (content.substring(1) == cow1Id)
+      tagCount1++;
+    else if (content.substring(1) == cow2Id)
+      tagCount2++;
+    sendAnimalId(tagCount1);
+    sendAnimalId(tagCount2);
   }
-
-  else if (content.substring(1) == cow2Id)
-  {
-    Serial.println("Cow two detected");
-    value_one = cow2Id;//assign cow 2 id to value_one
-    Serial.println();
-    delay(500);
-  }
-  //recordAnimal(content.substring(1));
 }
 
-void logString(char *message)
+// gsm
+void sendWaterLevel(int level)
 {
-  Serial.println(message);
-  Serial.println();
+  tosend(44);
+  waterLevelField(level);
+  endconnection();
 }
 
-void logFloat(float number)
+void sendAnimalId(int id)
 {
-  Serial.println(number);
-  value_two = number;//getting the water_level
-  Serial.println();
-}
-void openvalve() {
-  digitalWrite(valve_PIN, HIGH);
-}
-void closevalve() {
-  digitalWrite(valve_PIN, LOW);
+  tosend(12);
+  animalIdField(id);
+  endconnection();
 }
 
-// Arnold
-void delaying(){
-  if( firsttime == 0 ){
-    cloudupdate();
-    firsttime++;//5 minute delay starts
-  }
-  else{
-    delay(300000);
-    cloudupdate();
-  }
-}
+void tosend(int charSize)
+{
 
-void cloudupdate() {
-  //value_one = animalId;
-  Serial.println(" ");
-  Serial.println(" ");
-  Serial.println("Initializing... To make cloud backup ");    //Display in Serial Monitor
+  mySerial.println("AT"); //Once the handshake test is successful, i t will back to OK
+  delay(200);
+
+  mySerial.println("AT+CSQ"); //Signal quality test, value range is 0-31 , 31 is the best
+  delay(200);
+
+  mySerial.println("AT+CCID"); //Read SIM information to confirm whether the SIM is plugged
+  delay(200);
+
+  mySerial.println("AT+CPIN?");
+  delay(200);
+
+  mySerial.println("AT+CBC");
+  delay(200);
+
+  mySerial.println("AT+CREG?");
+  delay(200);
+
+  mySerial.println("AT+CGATT?");
+  delay(200);
+
+  mySerial.println("AT+CIPSHUT");
+  delay(200);
+
+  mySerial.println("AT+CIPSTATUS");
   delay(1000);
-  mySerial.println("AT");
-  updateSerial();
-  mySerial.println("AT+CFUN=0");  //Turn it off
-  updateSerial();
-  mySerial.println("AT+CFUN=1");  //Turn it on
-  updateSerial();
-  mySerial.println("AT+CIPSHUT"); //Shutdown any connections
-  updateSerial();
-  mySerial.println("AT+CIPMUX=0"); //Enable wireless communication
-  updateSerial();
-  mySerial.println("AT+CGATT=1"); //Activate GPRS connection
-  updateSerial();
-  mySerial.println("AT+CSTT=\"INTERNET\",\"\",\"\""); //Access point connection //Successful steps from this point causes successful cloud update
-  updateSerial();
-  mySerial.println("AT+CIICR"); //Get IP address //This also changes the blinking of the module
-  updateSerial();
-  mySerial.println("AT+CIFSR"); //Activate IP address
-  updateSerial();
-    
-    //Accessing the cloud resource
-    mySerial.println("AT+CIPSTART=\"TCP\",\"184.106.153.149\",80"); //Thingspeak.com Server connection
-    updateSerial();
-    mySerial.println("AT+CIPSEND=45"); //Bytes to be sent to the cloud 44-two, 45-three, 43-single
-    updateSerial();
 
-    mySerial.println("GET /update?key=KBFP2I9KYT77MC97&field1="+value_one+"&field2="+value_two);
-                
-    //mySerial.print("GET /update?api_key=KBFP2I9KYT77MC97&field1=");
+  mySerial.println("AT+CIPMUX=0 ");
+  delay(1000);
+  updateSerial();
 
-    //mySerial.print("api.thingspeak.com/update?api_key=xxxxxxxxxxxxxxxx&field1="); 
-    //---------------------------------------------------------------//
-    //mySerial.print("50");
-    //mySerial.println("\r\n");
+  mySerial.println("AT+CSTT=\"MTN-UGANDA\",\"MTN-INTERNET\","
+                   "");
+  delay(200);
+  updateSerial();
 
-    //  mySerial.println("GET https://api.thingspeak.com/update?api_key=UUFDD9H3Z3DZC4VL&field1=22\r\n\r\n");
+  mySerial.println("AT+CIICR"); //start wireless connection cellular network
+  delay(2000);
+  updateSerial();
 
-    //mySerial.print("api.thingspeak.com/update?api_key=KBFP2I9KYT77MC97&field1="); 
-    //mySerial.print("GET /update?api_key=KBFP2I9KYT77MC97&field1=");
-    //---------------------------------------------------------------//
-    //mySerial.print(value_one); //>>>>>>  variable 1 (RFID_tag)
-    //mySerial.print("&field2=");
-    //mySerial.print(value_two); //>>>>>> variable 2 (water_level)
+  mySerial.println("AT+CIFSR"); //enquire regarding the IP address allocated
+  delay(2000);
+  updateSerial();
 
-    updateSerial();
-  }
+  mySerial.println("AT+CIPSTART=\"TCP\",\"184.106.153.149\",\"80\""); //connect to the ThingSpeak update URL (https://api.thingspeak.com)
+  updateSerial();
 
-  void updateSerial()
+  /*Serial.println("WRITE CIPSTART: ");
+String command = Serial.readString();
+while(Serial.available())
+{
+  
+}
+updateSerial();*/
+
+  mySerial.println();
+  String cmd = "AT+CIPSEND=" + String(charSize);
+  mySerial.println(cmd); //declare the number of bytes (characters) I want to send
+  updateSerial();
+}
+void waterLevelField(int fieldValue)
+{
+  String str = "GET update?api_key=KBFP2I9KYT77MC97&field1=" + String(fieldValue); // use API key for water level channel
+  mySerial.println(str);                                                           //this is a constant beginning for the GET command and is as provided by ThingSpeak
+  delay(4000);
+  updateSerial();
+  mySerial.println((char)26);
+  delay(4000);
+  updateSerial();
+  mySerial.println();
+}
+
+void animalIdField(int fieldValue)
+{
+  String str = "GET update?api_key=3U8EWAGSE1G3J9TY&field1=" + String(fieldValue); // use API key for animal id channel
+  mySerial.println(str);                                                           //this is a constant beginning for the GET command and is as provided by ThingSpeak
+  delay(4000);
+  updateSerial();
+  mySerial.println((char)26);
+  delay(4000);
+  updateSerial();
+  mySerial.println();
+}
+
+void endconnection()
+{
+  mySerial.println("AT+CIPSHUT");
+  delay(200);
+  updateSerial();
+}
+void updateSerial()
+{
+  //delay(2500); // commented by Terry
+  while (Serial.available())
   {
-    delay(2000);   //Adjust this value to a smaller value if neccesary e.g 500
-    while (Serial.available())
-    {
-      mySerial.write(Serial.read());//Forward what Serial received to Software Serial Port
-    }
-    while (mySerial.available())
-    {
-      Serial.write(mySerial.read());//Forward what Software Serial received to Serial Port
-    }
+    mySerial.write(Serial.read()); //Forward what Serial received to Software Serial Port
   }
+  while (mySerial.available())
+  {
+    Serial.write(mySerial.read()); //Forward what Software Serial received to Serial Port
+  }
+}
